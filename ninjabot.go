@@ -41,21 +41,21 @@ type CandleSubscriber interface {
 }
 
 type NinjaBot struct {
-	storage  storage.Storage
-	settings model.Settings
-	exchange service.Exchange
-	strategy strategy.Strategy
-	notifier service.Notifier
-	telegram service.Telegram
+	storage  storage.Storage   // 持久化存储的接口
+	settings model.Settings    // 配置信息
+	exchange service.Exchange  // 交易所的接口，用于与交易所进行交互
+	strategy strategy.Strategy // 交易策略，定义了机器人的交易逻辑
+	notifier service.Notifier  // 通知器，用于发送通知消息
+	telegram service.Telegram  // 用于通过电报发送消息
 
-	orderController       *order.Controller
-	priorityQueueCandle   *model.PriorityQueue
-	strategiesControllers map[string]*strategy.Controller
-	orderFeed             *order.Feed
-	dataFeed              *exchange.DataFeedSubscription
-	paperWallet           *exchange.PaperWallet
+	orderController       *order.Controller               // 订单控制器，用于管理订单的创建、取消等操作。
+	priorityQueueCandle   *model.PriorityQueue            // 优先级队列，用于按照时间顺序处理K线数据。
+	strategiesControllers map[string]*strategy.Controller // 策略控制器，存储不同交易对对应的策略控制器。
+	orderFeed             *order.Feed                     // 订单数据源，用于接收订单信息
+	dataFeed              *exchange.DataFeedSubscription  // 数据源订阅，用于订阅交易数据。
+	paperWallet           *exchange.PaperWallet           // Paper钱包，用于模拟交易
 
-	backtest bool
+	backtest bool // 是否在回测模式下运行
 }
 
 type Option func(*NinjaBot)
@@ -106,6 +106,8 @@ func NewBot(ctx context.Context, settings model.Settings, exch service.Exchange,
 	return bot, nil
 }
 
+// WithBacktest 将机器人设置为运行在回测模式下，这在回测环境中是必需的
+// 回测模式优化了用于 CSV 的输入读取，并处理了竞态条件
 // WithBacktest sets the bot to run in backtest mode, it is required for backtesting environments
 // Backtest mode optimize the input read for CSV and deal with race conditions
 func WithBacktest(wallet *exchange.PaperWallet) Option {
@@ -116,6 +118,7 @@ func WithBacktest(wallet *exchange.PaperWallet) Option {
 	}
 }
 
+// WithStorage 设置机器人的存储， 默认使用一个名为 ninjabot.db 的本地文件
 // WithStorage sets the storage for the bot, by default it uses a local file called ninjabot.db
 func WithStorage(storage storage.Storage) Option {
 	return func(bot *NinjaBot) {
@@ -123,6 +126,7 @@ func WithStorage(storage storage.Storage) Option {
 	}
 }
 
+// WithLogLevel 设置日志级别。例如: log.DebugLevel、log.InfoLevel、log.WarnLevel、log.ErrorLevel、log.FatalLevel
 // WithLogLevel sets the log level. eg: log.DebugLevel, log.InfoLevel, log.WarnLevel, log.ErrorLevel, log.FatalLevel
 func WithLogLevel(level log.Level) Option {
 	return func(_ *NinjaBot) {
@@ -130,6 +134,7 @@ func WithLogLevel(level log.Level) Option {
 	}
 }
 
+// WithNotifier 向机器人注册一个通知器，当前仅支持电子邮件和电报
 // WithNotifier registers a notifier to the bot, currently only email and telegram are supported
 func WithNotifier(notifier service.Notifier) Option {
 	return func(bot *NinjaBot) {
@@ -139,6 +144,7 @@ func WithNotifier(notifier service.Notifier) Option {
 	}
 }
 
+// WithCandleSubscription 将给定的结构订阅到蜡烛图数据流中
 // WithCandleSubscription subscribes a given struct to the candle feed
 func WithCandleSubscription(subscriber CandleSubscriber) Option {
 	return func(bot *NinjaBot) {
@@ -146,6 +152,7 @@ func WithCandleSubscription(subscriber CandleSubscriber) Option {
 	}
 }
 
+// WithPaperWallet 为机器人设置纸钱包（用于回测和实时模拟）
 // WithPaperWallet sets the paper wallet for the bot (used for backtesting and live simulation)
 func WithPaperWallet(wallet *exchange.PaperWallet) Option {
 	return func(bot *NinjaBot) {
@@ -161,6 +168,7 @@ func (n *NinjaBot) SubscribeCandle(subscriptions ...CandleSubscriber) {
 	}
 }
 
+// WithOrderSubscription 将给定的结构订阅到订单数据流中
 func WithOrderSubscription(subscriber OrderSubscriber) Option {
 	return func(bot *NinjaBot) {
 		bot.SubscribeOrder(subscriber)
@@ -179,6 +187,8 @@ func (n *NinjaBot) Controller() *order.Controller {
 	return n.orderController
 }
 
+// Summary 函数在 stdout 中显示所有交易、准确度和一些机器人指标
+// 要访问原始数据，可以访问 `bot.Controller().Results`
 // Summary function displays all trades, accuracy and some bot metrics in stdout
 // To access the raw data, you may access `bot.Controller().Results`
 func (n *NinjaBot) Summary() {
@@ -273,9 +283,13 @@ func (n *NinjaBot) Summary() {
 
 }
 
+// SaveReturns 将交易结果保存到CSV文件中
 func (n NinjaBot) SaveReturns(outputDir string) error {
+	// 遍历所有交易对的交易结果
 	for _, summary := range n.orderController.Results {
+		// 构建输出文件路径
 		outputFile := fmt.Sprintf("%s/%s.csv", outputDir, summary.Pair)
+		// 调用每个交易对的SaveReturns方法保存返回数据到CSV文件中
 		if err := summary.SaveReturns(outputFile); err != nil {
 			return err
 		}
@@ -283,22 +297,28 @@ func (n NinjaBot) SaveReturns(outputDir string) error {
 	return nil
 }
 
+// onCandle 将蜡烛图数据推送到优先队列中
 func (n *NinjaBot) onCandle(candle model.Candle) {
 	n.priorityQueueCandle.Push(candle)
 }
 
+// processCandle 处理蜡烛图数据
 func (n *NinjaBot) processCandle(candle model.Candle) {
+	// 如果有纸钱包，将蜡烛图数据传递给纸钱包
 	if n.paperWallet != nil {
 		n.paperWallet.OnCandle(candle)
 	}
 
+	// 调用策略控制器的OnPartialCandle方法
 	n.strategiesControllers[candle.Pair].OnPartialCandle(candle)
+	// 如果蜡烛图完整，调用策略控制器的OnCandle方法和订单控制器的OnCandle方法
 	if candle.Complete {
 		n.strategiesControllers[candle.Pair].OnCandle(candle)
 		n.orderController.OnCandle(candle)
 	}
 }
 
+// processCandles 处理挂起的蜡烛图数据
 // Process pending candles in buffer
 func (n *NinjaBot) processCandles() {
 	for item := range n.priorityQueueCandle.PopLock() {
@@ -306,31 +326,37 @@ func (n *NinjaBot) processCandles() {
 	}
 }
 
+// backtestCandles 执行回测过程
 // Start the backtest process and create a progress bar
 // backtestCandles will process candles from a prirority queue in chronological order
 func (n *NinjaBot) backtestCandles() {
 	log.Info("[SETUP] Starting backtesting")
 
+	// 创建进度条
 	progressBar := progressbar.Default(int64(n.priorityQueueCandle.Len()))
 	for n.priorityQueueCandle.Len() > 0 {
 		item := n.priorityQueueCandle.Pop()
 
 		candle := item.(model.Candle)
+		// 如果有纸钱包，将蜡烛图数据传递给纸钱包
 		if n.paperWallet != nil {
 			n.paperWallet.OnCandle(candle)
 		}
 
+		// 调用策略控制器的OnPartialCandle方法和OnCandle方法
 		n.strategiesControllers[candle.Pair].OnPartialCandle(candle)
 		if candle.Complete {
 			n.strategiesControllers[candle.Pair].OnCandle(candle)
 		}
 
+		// 更新进度条
 		if err := progressBar.Add(1); err != nil {
 			log.Warnf("update progressbar fail: %v", err)
 		}
 	}
 }
 
+// preload 预加载数据
 // Before Ninjabot start, we need to load the necessary data to fill strategy indicators
 // Then, we need to get the time frame and warmup period to fetch the necessary candles
 func (n *NinjaBot) preload(ctx context.Context, pair string) error {
@@ -338,39 +364,48 @@ func (n *NinjaBot) preload(ctx context.Context, pair string) error {
 		return nil
 	}
 
+	// 获取指定交易对的蜡烛图数据
 	candles, err := n.exchange.CandlesByLimit(ctx, pair, n.strategy.Timeframe(), n.strategy.WarmupPeriod())
 	if err != nil {
 		return err
 	}
 
+	// 处理每个蜡烛图数据
 	for _, candle := range candles {
 		n.processCandle(candle)
 	}
 
+	// 预加载数据到数据源中
 	n.dataFeed.Preload(pair, n.strategy.Timeframe(), candles)
 
 	return nil
 }
 
+// Run 初始化机器人并启动
 // Run will initialize the strategy controller, order controller, preload data and start the bot
 func (n *NinjaBot) Run(ctx context.Context) error {
 	for _, pair := range n.settings.Pairs {
+		// 设置并订阅策略控制器
 		// setup and subscribe strategy to data feed (candles)
 		n.strategiesControllers[pair] = strategy.NewStrategyController(pair, n.strategy, n.orderController)
 
+		// 预加载数据
 		// preload candles for warmup period
 		err := n.preload(ctx, pair)
 		if err != nil {
 			return err
 		}
 
+		// 订阅蜡烛图数据
 		// link to ninja bot controller
 		n.dataFeed.Subscribe(pair, n.strategy.Timeframe(), n.onCandle, false)
 
+		// 启动策略控制器
 		// start strategy controller
 		n.strategiesControllers[pair].Start()
 	}
 
+	// 启动订单数据源和控制器
 	// start order feed and controller
 	n.orderFeed.Start()
 	n.orderController.Start()
@@ -379,9 +414,11 @@ func (n *NinjaBot) Run(ctx context.Context) error {
 		n.telegram.Start()
 	}
 
+	// 启动数据源并接收新的蜡烛图数据
 	// start data feed and receives new candles
 	n.dataFeed.Start(n.backtest)
 
+	// 根据环境启动处理蜡烛图数据的方法
 	// start processing new candles for production or backtesting environment
 	if n.backtest {
 		n.backtestCandles()

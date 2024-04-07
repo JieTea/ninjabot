@@ -39,7 +39,7 @@ func SplitAssetQuote(pair string) (asset string, quote string) {
 
 // 通过 Binance API 更新交易对映射表，并将更新后的映射表保存到文件中。
 // 这个函数会调用 Binance API 获取现货和期货交易对信息，
-// 然后更新pairAssetQuoteMap并保存到文件中。
+// 然后更新 pairAssetQuoteMap 并保存到 pairs.json 文件中。
 func updatePairsFile() error {
 	client := binance.NewClient("", "")
 	sportInfo, err := client.NewExchangeInfoService().Do(context.Background())

@@ -20,7 +20,8 @@ type Strategy interface {
 	Indicators(df *model.Dataframe) []ChartIndicator
 	// OnCandle will be executed for each new candle, after indicators are filled, here you can do your trading logic.
 	// OnCandle is executed after the candle close.
-	// 在每个新蜡烛图中执行，指标填充后执行，在这里可以编写交易逻辑。在蜡烛图关闭后执行。
+	// 在每个新蜡烛图中执行，指标填充后执行，
+	// 在这里可以编写交易逻辑。在蜡烛图关闭后执行。
 	OnCandle(df *model.Dataframe, broker service.Broker)
 }
 

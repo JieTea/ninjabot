@@ -32,6 +32,10 @@ type CSVFeed struct {
 	CandlePairTimeFrame map[string][]model.Candle // 蜡烛图时间框架到对应数据的映射
 }
 
+func (c CSVFeed) LastQuote(_ context.Context, _ string) (float64, error) {
+	return 0, errors.New("invalid operation")
+}
+
 // AssetsInfo 根据交易对名称返回一个默认的资产信息结构体
 func (c CSVFeed) AssetsInfo(pair string) model.AssetInfo {
 	asset, quote := SplitAssetQuote(pair)
@@ -181,6 +185,7 @@ func (c *CSVFeed) Limit(duration time.Duration) *CSVFeed {
 
 // isFirstCandlePeriod 和 isLastCandlePeriod 用于检查给定时间是否为指定时间框架的第一个或最后一个时间段
 func isFirstCandlePeriod(t time.Time, fromTimeframe, targetTimeframe string) (bool, error) {
+	fmt.Println("psram: ", t.String(), fromTimeframe, targetTimeframe)
 	fromDuration, err := str2duration.ParseDuration(fromTimeframe)
 	if err != nil {
 		return false, err
@@ -188,21 +193,34 @@ func isFirstCandlePeriod(t time.Time, fromTimeframe, targetTimeframe string) (bo
 
 	prev := t.Add(-fromDuration).UTC()
 
+	fmt.Println("prev: ", prev.String(), fromDuration)
+
 	return isLastCandlePeriod(prev, fromTimeframe, targetTimeframe)
 }
 
+// isLastCandlePeriod 判断给定时间点是否是指定时间框架的最后一个蜡烛图周期
+// t: 要检查的时间点
+// fromTimeframe: 当前时间框架，例如："1m"、"5m"、"1h"等
+// targetTimeframe: 目标时间框架，需要确定给定时间点是否是其最后一个周期
+// 返回值:
+//   - bool: 给定时间点是否是目标时间框架的最后一个周期
+//   - error: 如果时间框架无效，则返回错误
 func isLastCandlePeriod(t time.Time, fromTimeframe, targetTimeframe string) (bool, error) {
+	// 如果当前时间框架与目标时间框架相同，则认为是最后一个周期
 	if fromTimeframe == targetTimeframe {
 		return true, nil
 	}
 
+	// 将当前时间框架解析为持续时间
 	fromDuration, err := str2duration.ParseDuration(fromTimeframe)
 	if err != nil {
 		return false, err
 	}
 
+	// 计算当前时间点的下一个时间点
 	next := t.Add(fromDuration).UTC()
 
+	// 根据目标时间框架进行判断
 	switch targetTimeframe {
 	case "1m":
 		return next.Second()%60 == 0, nil
