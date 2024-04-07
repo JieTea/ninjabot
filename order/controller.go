@@ -19,6 +19,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// summary 用于存储交易统计信息
 type summary struct {
 	Pair             string
 	WinLong          []float64
@@ -32,22 +33,27 @@ type summary struct {
 	Volume           float64
 }
 
+// Win 返回所有盈利交易的利润值
 func (s summary) Win() []float64 {
 	return append(s.WinLong, s.WinShort...)
 }
 
+// WinPercent 返回所有盈利交易的利润百分比
 func (s summary) WinPercent() []float64 {
 	return append(s.WinLongPercent, s.WinShortPercent...)
 }
 
+// Lose 返回所有亏损交易的亏损值
 func (s summary) Lose() []float64 {
 	return append(s.LoseLong, s.LoseShort...)
 }
 
+// LosePercent 返回所有亏损交易的亏损百分比
 func (s summary) LosePercent() []float64 {
 	return append(s.LoseLongPercent, s.LoseShortPercent...)
 }
 
+// Profit 返回总利润值
 func (s summary) Profit() float64 {
 	profit := 0.0
 	for _, value := range append(s.Win(), s.Lose()...) {
@@ -56,6 +62,7 @@ func (s summary) Profit() float64 {
 	return profit
 }
 
+// SQN 返回 SQN 值
 func (s summary) SQN() float64 {
 	total := float64(len(s.Win()) + len(s.Lose()))
 	avgProfit := s.Profit() / total
@@ -67,6 +74,7 @@ func (s summary) SQN() float64 {
 	return math.Sqrt(total) * (s.Profit() / total) / stdDev
 }
 
+// Payoff 返回盈利风险比
 func (s summary) Payoff() float64 {
 	avgWin := 0.0
 	avgLose := 0.0
@@ -86,6 +94,7 @@ func (s summary) Payoff() float64 {
 	return (avgWin / float64(len(s.Win()))) / math.Abs(avgLose/float64(len(s.Lose())))
 }
 
+// ProfitFactor 返回利润因子
 func (s summary) ProfitFactor() float64 {
 	if len(s.Lose()) == 0 {
 		return 0
@@ -102,6 +111,7 @@ func (s summary) ProfitFactor() float64 {
 	return profit / math.Abs(loss)
 }
 
+// WinPercentage 返回胜率
 func (s summary) WinPercentage() float64 {
 	if len(s.Win())+len(s.Lose()) == 0 {
 		return 0
@@ -110,6 +120,7 @@ func (s summary) WinPercentage() float64 {
 	return float64(len(s.Win())) / float64(len(s.Win())+len(s.Lose())) * 100
 }
 
+// String 返回 summary 的字符串表示，用于打印输出
 func (s summary) String() string {
 	tableString := &strings.Builder{}
 	table := tablewriter.NewWriter(tableString)
@@ -131,6 +142,7 @@ func (s summary) String() string {
 	return tableString.String()
 }
 
+// SaveReturns 将交易统计数据保存到文件中
 func (s summary) SaveReturns(filename string) error {
 	file, err := os.Create(filename)
 	if err != nil {
@@ -154,6 +166,7 @@ func (s summary) SaveReturns(filename string) error {
 	return nil
 }
 
+// Status 表示订单管理器的状态
 type Status string
 
 const (
@@ -162,6 +175,7 @@ const (
 	StatusError   Status = "error"
 )
 
+// Result 表示一个交易结果
 type Result struct {
 	Pair          string
 	ProfitPercent float64
@@ -171,6 +185,7 @@ type Result struct {
 	CreatedAt     time.Time
 }
 
+// Position 表示一个持仓
 type Position struct {
 	Side      model.SideType
 	AvgPrice  float64
@@ -178,6 +193,7 @@ type Position struct {
 	CreatedAt time.Time
 }
 
+// Update 根据新的订单更新持仓状态，并返回交易结果和是否已结束持仓的标志
 func (p *Position) Update(order *model.Order) (result *Result, finished bool) {
 	price := order.Price
 	if order.Type == model.OrderTypeStopLoss || order.Type == model.OrderTypeStopLossLimit {
@@ -218,6 +234,7 @@ func (p *Position) Update(order *model.Order) (result *Result, finished bool) {
 	return nil, false
 }
 
+// Controller 控制器，负责管理订单和持仓
 type Controller struct {
 	mtx            sync.Mutex
 	ctx            context.Context
@@ -234,6 +251,7 @@ type Controller struct {
 	position map[string]*Position
 }
 
+// NewController 创建一个新的订单控制器
 func NewController(ctx context.Context, exchange service.Exchange, storage storage.Storage,
 	orderFeed *Feed) *Controller {
 
@@ -250,16 +268,19 @@ func NewController(ctx context.Context, exchange service.Exchange, storage stora
 	}
 }
 
+// SetNotifier 设置通知器
 func (c *Controller) SetNotifier(notifier service.Notifier) {
 	c.notifier = notifier
 }
 
+// OnCandle 处理 K 线数据
 func (c *Controller) OnCandle(candle model.Candle) {
 	c.lastPrice[candle.Pair] = candle.Close
 }
 
+// updatePosition 更新持仓状态
 func (c *Controller) updatePosition(o *model.Order) {
-	// get filled orders before the current order
+	// 获取当前订单之前已成交的订单
 	position, ok := c.position[o.Pair]
 	if !ok {
 		c.position[o.Pair] = &Position{
@@ -277,7 +298,6 @@ func (c *Controller) updatePosition(o *model.Order) {
 	}
 
 	if result != nil {
-		// TODO: replace by a slice of Result
 		if result.ProfitPercent >= 0 {
 			if result.Side == model.SideTypeBuy {
 				c.Results[o.Pair].WinLong = append(c.Results[o.Pair].WinLong, result.ProfitValue)
@@ -307,6 +327,7 @@ func (c *Controller) updatePosition(o *model.Order) {
 	}
 }
 
+// notify 发送通知消息
 func (c *Controller) notify(message string) {
 	log.Info(message)
 	if c.notifier != nil {
@@ -314,6 +335,7 @@ func (c *Controller) notify(message string) {
 	}
 }
 
+// notifyError 发送错误通知消息
 func (c *Controller) notifyError(err error) {
 	log.Error(err)
 	if c.notifier != nil {
@@ -321,28 +343,25 @@ func (c *Controller) notifyError(err error) {
 	}
 }
 
+// processTrade 处理交易订单
 func (c *Controller) processTrade(order *model.Order) {
 	if order.Status != model.OrderStatusTypeFilled {
 		return
 	}
 
-	// initializer results map if needed
 	if _, ok := c.Results[order.Pair]; !ok {
 		c.Results[order.Pair] = &summary{Pair: order.Pair}
 	}
 
-	// register order volume
 	c.Results[order.Pair].Volume += order.Price * order.Quantity
-
-	// update position size / avg price
 	c.updatePosition(order)
 }
 
+// updateOrders 更新订单状态
 func (c *Controller) updateOrders() {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 
-	//pending orders
 	orders, err := c.storage.Orders(storage.WithStatusIn(
 		model.OrderStatusTypeNew,
 		model.OrderStatusTypePartiallyFilled,
@@ -354,7 +373,6 @@ func (c *Controller) updateOrders() {
 		return
 	}
 
-	// For each pending order, check for updates
 	var updatedOrders []model.Order
 	for _, order := range orders {
 		excOrder, err := c.exchange.Order(order.Pair, order.ExchangeID)
@@ -363,7 +381,6 @@ func (c *Controller) updateOrders() {
 			continue
 		}
 
-		// no status change
 		if excOrder.Status == order.Status {
 			continue
 		}
@@ -385,10 +402,12 @@ func (c *Controller) updateOrders() {
 	}
 }
 
+// Status 返回订单管理器的状态
 func (c *Controller) Status() Status {
 	return c.status
 }
 
+// Start 启动订单管理器
 func (c *Controller) Start() {
 	if c.status != StatusRunning {
 		c.status = StatusRunning
@@ -408,6 +427,7 @@ func (c *Controller) Start() {
 	}
 }
 
+// Stop 停止订单管理器
 func (c *Controller) Stop() {
 	if c.status == StatusRunning {
 		c.status = StatusStopped
@@ -417,18 +437,22 @@ func (c *Controller) Stop() {
 	}
 }
 
+// Account 获取账户信息
 func (c *Controller) Account() (model.Account, error) {
 	return c.exchange.Account()
 }
 
+// Position 获取持仓信息
 func (c *Controller) Position(pair string) (asset, quote float64, err error) {
 	return c.exchange.Position(pair)
 }
 
+// LastQuote 获取最新报价
 func (c *Controller) LastQuote(pair string) (float64, error) {
 	return c.exchange.LastQuote(c.ctx, pair)
 }
 
+// PositionValue 获取持仓价值
 func (c *Controller) PositionValue(pair string) (float64, error) {
 	asset, _, err := c.exchange.Position(pair)
 	if err != nil {
@@ -437,10 +461,12 @@ func (c *Controller) PositionValue(pair string) (float64, error) {
 	return asset * c.lastPrice[pair], nil
 }
 
+// Order 获取订单信息
 func (c *Controller) Order(pair string, id int64) (model.Order, error) {
 	return c.exchange.Order(pair, id)
 }
 
+// CreateOrderOCO 创建 OCO 订单
 func (c *Controller) CreateOrderOCO(side model.SideType, pair string, size, price, stop,
 	stopLimit float64) ([]model.Order, error) {
 	c.mtx.Lock()
@@ -465,6 +491,7 @@ func (c *Controller) CreateOrderOCO(side model.SideType, pair string, size, pric
 	return orders, nil
 }
 
+// CreateOrderLimit 创建限价单
 func (c *Controller) CreateOrderLimit(side model.SideType, pair string, size, limit float64) (model.Order, error) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
@@ -486,6 +513,7 @@ func (c *Controller) CreateOrderLimit(side model.SideType, pair string, size, li
 	return order, nil
 }
 
+// CreateOrderMarketQuote 创建市价单（按报价）
 func (c *Controller) CreateOrderMarketQuote(side model.SideType, pair string, amount float64) (model.Order, error) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
@@ -503,13 +531,13 @@ func (c *Controller) CreateOrderMarketQuote(side model.SideType, pair string, am
 		return model.Order{}, err
 	}
 
-	// calculate profit
 	c.processTrade(&order)
 	go c.orderFeed.Publish(order, true)
 	log.Infof("[ORDER CREATED] %s", order)
 	return order, err
 }
 
+// CreateOrderMarket 创建市价单
 func (c *Controller) CreateOrderMarket(side model.SideType, pair string, size float64) (model.Order, error) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
@@ -527,13 +555,13 @@ func (c *Controller) CreateOrderMarket(side model.SideType, pair string, size fl
 		return model.Order{}, err
 	}
 
-	// calculate profit
 	c.processTrade(&order)
 	go c.orderFeed.Publish(order, true)
 	log.Infof("[ORDER CREATED] %s", order)
 	return order, err
 }
 
+// CreateOrderStop 创建止损单
 func (c *Controller) CreateOrderStop(pair string, size float64, limit float64) (model.Order, error) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
@@ -555,6 +583,7 @@ func (c *Controller) CreateOrderStop(pair string, size float64, limit float64) (
 	return order, nil
 }
 
+// Cancel 取消订单
 func (c *Controller) Cancel(order model.Order) error {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()

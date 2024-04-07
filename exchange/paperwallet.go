@@ -16,36 +16,53 @@ import (
 	"github.com/rodrigo-brito/ninjabot/tools/log"
 )
 
+/**
+实现了一个模拟交易钱包的功能，主要用于在模拟环境中进行加密货币交易策略的测试和验证。其设计目的包括以下几个方面：
+模拟环境: 提供一个模拟的交易环境，可以在其中测试和验证交易策略，而无需使用真实的加密货币资金。
+交易逻辑: 实现了交易的各种逻辑，包括订单的创建、取消、成交等，以及资金的验证和更新。
+账户管理: 提供了账户信息的管理，包括资产余额、持仓信息等，方便用户了解交易情况。
+订单管理: 实现了订单的管理功能，包括创建不同类型的订单（限价、市价、止损止盈等）、查询订单信息、取消订单等。
+资产价值计算: 可以计算不同交易对的资产价值，包括单个资产的价值变化和整个钱包的总价值变化。
+风险控制: 提供了一些风险控制的功能，如最大回撤计算等，帮助用户评估交易策略的风险。
+蜡烛图数据: 可以获取和处理蜡烛图数据，用于分析市场趋势和制定交易策略
+*/
+
+// 资产的结构体
 type assetInfo struct {
-	Free float64
-	Lock float64
+	Free float64 // 可用余额
+	Lock float64 // 锁定余额
 }
 
+// AssetValue 资产价值
 type AssetValue struct {
-	Time  time.Time
-	Value float64
+	Time  time.Time // 时间
+	Value float64   // 值
 }
 
+// PaperWallet 虚拟钱包的结构体
+// 模拟交易环境中跟踪资产、订单、交易量等信息，
+// 并提供订单创建、资金验证、持仓管理等功能
 type PaperWallet struct {
 	sync.Mutex
-	ctx           context.Context
-	baseCoin      string
-	counter       int64
-	takerFee      float64
-	makerFee      float64
-	initialValue  float64
-	feeder        service.Feeder
-	orders        []model.Order
-	assets        map[string]*assetInfo
-	avgShortPrice map[string]float64
-	avgLongPrice  map[string]float64
-	volume        map[string]float64
-	lastCandle    map[string]model.Candle
-	fistCandle    map[string]model.Candle
-	assetValues   map[string][]AssetValue
-	equityValues  []AssetValue
+	ctx           context.Context         // 上下文对象
+	baseCoin      string                  // 基础货币
+	counter       int64                   // 计数器，用于生成唯一的订单ID
+	takerFee      float64                 // 吃单手续费率
+	makerFee      float64                 // 挂单手续费率
+	initialValue  float64                 // 初始价值
+	feeder        service.Feeder          // 数据源
+	orders        []model.Order           // 订单列表
+	assets        map[string]*assetInfo   // 资产信息，key为货币对，value为资产信息结构体指针
+	avgShortPrice map[string]float64      // 平均空头价格，key为货币对，value为价格
+	avgLongPrice  map[string]float64      // 平均多头价格，key为货币对，value为价格
+	volume        map[string]float64      // 交易量，key为货币对，value为交易量
+	lastCandle    map[string]model.Candle // 最后一根K线，key为货币对，value为K线数据
+	fistCandle    map[string]model.Candle // 第一根K线，key为货币对，value为K线数据
+	assetValues   map[string][]AssetValue // 资产价值历史记录，key为货币对，value为价值历史记录
+	equityValues  []AssetValue            // 账户总价值历史记录
 }
 
+// AssetsInfo 返回给定交易对的资产信息
 func (p *PaperWallet) AssetsInfo(pair string) model.AssetInfo {
 	asset, quote := SplitAssetQuote(pair)
 	return model.AssetInfo{
@@ -60,8 +77,10 @@ func (p *PaperWallet) AssetsInfo(pair string) model.AssetInfo {
 	}
 }
 
+// PaperWalletOption 定义 PaperWallet 的选项函数类型
 type PaperWalletOption func(*PaperWallet)
 
+// WithPaperAsset 设置指定交易对的资产
 func WithPaperAsset(pair string, amount float64) PaperWalletOption {
 	return func(wallet *PaperWallet) {
 		wallet.assets[pair] = &assetInfo{
@@ -71,6 +90,7 @@ func WithPaperAsset(pair string, amount float64) PaperWalletOption {
 	}
 }
 
+// WithPaperFee 设置 Maker 和 Taker 的手续费率
 func WithPaperFee(maker, taker float64) PaperWalletOption {
 	return func(wallet *PaperWallet) {
 		wallet.makerFee = maker
@@ -78,12 +98,14 @@ func WithPaperFee(maker, taker float64) PaperWalletOption {
 	}
 }
 
+// WithDataFeed 设置数据源
 func WithDataFeed(feeder service.Feeder) PaperWalletOption {
 	return func(wallet *PaperWallet) {
 		wallet.feeder = feeder
 	}
 }
 
+// NewPaperWallet 创建一个新的 PaperWallet 实例
 func NewPaperWallet(ctx context.Context, baseCoin string, options ...PaperWalletOption) *PaperWallet {
 	wallet := PaperWallet{
 		ctx:           ctx,
@@ -110,11 +132,13 @@ func NewPaperWallet(ctx context.Context, baseCoin string, options ...PaperWallet
 	return &wallet
 }
 
+// ID 返回一个唯一的订单ID
 func (p *PaperWallet) ID() int64 {
 	p.counter++
 	return p.counter
 }
 
+// Pairs 返回钱包中的所有交易对
 func (p *PaperWallet) Pairs() []string {
 	pairs := make([]string, 0)
 	for pair := range p.assets {
@@ -123,18 +147,22 @@ func (p *PaperWallet) Pairs() []string {
 	return pairs
 }
 
+// LastQuote 返回指定交易对的最新报价
 func (p *PaperWallet) LastQuote(ctx context.Context, pair string) (float64, error) {
 	return p.feeder.LastQuote(ctx, pair)
 }
 
+// AssetValues 返回指定交易对的资产价值列表
 func (p *PaperWallet) AssetValues(pair string) []AssetValue {
 	return p.assetValues[pair]
 }
 
+// EquityValues 返回所有资产的总价值列表
 func (p *PaperWallet) EquityValues() []AssetValue {
 	return p.equityValues
 }
 
+// MaxDrawdown 计算最大回撤
 func (p *PaperWallet) MaxDrawdown() (float64, time.Time, time.Time) {
 	if len(p.equityValues) < 1 {
 		return 0, time.Time{}, time.Time{}
@@ -174,6 +202,7 @@ func (p *PaperWallet) MaxDrawdown() (float64, time.Time, time.Time) {
 	return globalMin / globalMinBase, globalMinStart, globalMinEnd
 }
 
+// Summary 输出钱包的总结信息
 func (p *PaperWallet) Summary() {
 	var (
 		total        float64
@@ -224,6 +253,7 @@ func (p *PaperWallet) Summary() {
 	fmt.Println("-------------------")
 }
 
+// validateFunds 验证资金是否足够进行交易
 func (p *PaperWallet) validateFunds(side model.SideType, pair string, amount, value float64, fill bool) error {
 	asset, quote := SplitAssetQuote(pair)
 	if _, ok := p.assets[asset]; !ok {
@@ -307,6 +337,7 @@ func (p *PaperWallet) validateFunds(side model.SideType, pair string, amount, va
 	return nil
 }
 
+// updateAveragePrice 更新平均价格
 func (p *PaperWallet) updateAveragePrice(side model.SideType, pair string, amount, value float64) {
 	actualQty := 0.0
 	asset, quote := SplitAssetQuote(pair)
@@ -369,6 +400,7 @@ func (p *PaperWallet) updateAveragePrice(side model.SideType, pair string, amoun
 	}
 }
 
+// OnCandle 处理蜡烛图更新
 func (p *PaperWallet) OnCandle(candle model.Candle) {
 	p.Lock()
 	defer p.Unlock()
@@ -475,6 +507,7 @@ func (p *PaperWallet) OnCandle(candle model.Candle) {
 	}
 }
 
+// Account 返回钱包的账户信息
 func (p *PaperWallet) Account() (model.Account, error) {
 	balances := make([]model.Balance, 0)
 	for pair, info := range p.assets {
@@ -490,6 +523,7 @@ func (p *PaperWallet) Account() (model.Account, error) {
 	}, nil
 }
 
+// Position 返回指定交易对的持仓信息
 func (p *PaperWallet) Position(pair string) (asset, quote float64, err error) {
 	p.Lock()
 	defer p.Unlock()
@@ -505,6 +539,7 @@ func (p *PaperWallet) Position(pair string) (asset, quote float64, err error) {
 	return assetBalance.Free + assetBalance.Lock, quoteBalance.Free + quoteBalance.Lock, nil
 }
 
+// CreateOrderOCO 创建一个止损止盈订单
 func (p *PaperWallet) CreateOrderOCO(side model.SideType, pair string,
 	size, price, stop, stopLimit float64) ([]model.Order, error) {
 	p.Lock()
@@ -553,6 +588,7 @@ func (p *PaperWallet) CreateOrderOCO(side model.SideType, pair string,
 	return []model.Order{limitMaker, stopOrder}, nil
 }
 
+// CreateOrderLimit 创建一个限价订单
 func (p *PaperWallet) CreateOrderLimit(side model.SideType, pair string,
 	size float64, limit float64) (model.Order, error) {
 
@@ -582,6 +618,7 @@ func (p *PaperWallet) CreateOrderLimit(side model.SideType, pair string,
 	return order, nil
 }
 
+// CreateOrderMarket 创建一个市价订单
 func (p *PaperWallet) CreateOrderMarket(side model.SideType, pair string, size float64) (model.Order, error) {
 	p.Lock()
 	defer p.Unlock()
@@ -589,6 +626,7 @@ func (p *PaperWallet) CreateOrderMarket(side model.SideType, pair string, size f
 	return p.createOrderMarket(side, pair, size)
 }
 
+// CreateOrderStop 创建一个止损订单
 func (p *PaperWallet) CreateOrderStop(pair string, size float64, limit float64) (model.Order, error) {
 	p.Lock()
 	defer p.Unlock()
@@ -618,6 +656,7 @@ func (p *PaperWallet) CreateOrderStop(pair string, size float64, limit float64) 
 	return order, nil
 }
 
+// CreateOrderMarket 创建一个市价订单
 func (p *PaperWallet) createOrderMarket(side model.SideType, pair string, size float64) (model.Order, error) {
 	if size == 0 {
 		return model.Order{}, ErrInvalidQuantity
@@ -651,6 +690,7 @@ func (p *PaperWallet) createOrderMarket(side model.SideType, pair string, size f
 	return order, nil
 }
 
+// CreateOrderMarketQuote 根据报价创建一个市价订单
 func (p *PaperWallet) CreateOrderMarketQuote(side model.SideType, pair string,
 	quoteQuantity float64) (model.Order, error) {
 	p.Lock()
@@ -661,6 +701,7 @@ func (p *PaperWallet) CreateOrderMarketQuote(side model.SideType, pair string,
 	return p.createOrderMarket(side, pair, quantity)
 }
 
+// Cancel 取消订单
 func (p *PaperWallet) Cancel(order model.Order) error {
 	p.Lock()
 	defer p.Unlock()
@@ -673,6 +714,7 @@ func (p *PaperWallet) Cancel(order model.Order) error {
 	return nil
 }
 
+// Order 返回指定ID的订单信息
 func (p *PaperWallet) Order(_ string, id int64) (model.Order, error) {
 	for _, order := range p.orders {
 		if order.ExchangeID == id {
@@ -682,15 +724,18 @@ func (p *PaperWallet) Order(_ string, id int64) (model.Order, error) {
 	return model.Order{}, errors.New("order not found")
 }
 
+// CandlesByPeriod 根据时间段和交易对获取蜡烛图数据
 func (p *PaperWallet) CandlesByPeriod(ctx context.Context, pair, period string,
 	start, end time.Time) ([]model.Candle, error) {
 	return p.feeder.CandlesByPeriod(ctx, pair, period, start, end)
 }
 
+// CandlesByLimit 根据数量限制获取蜡烛图数据
 func (p *PaperWallet) CandlesByLimit(ctx context.Context, pair, period string, limit int) ([]model.Candle, error) {
 	return p.feeder.CandlesByLimit(ctx, pair, period, limit)
 }
 
+// CandlesSubscription 订阅蜡烛图数据
 func (p *PaperWallet) CandlesSubscription(ctx context.Context, pair, timeframe string) (chan model.Candle, chan error) {
 	return p.feeder.CandlesSubscription(ctx, pair, timeframe)
 }

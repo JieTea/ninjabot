@@ -18,18 +18,21 @@ import (
 
 var ErrInsufficientData = errors.New("insufficient data")
 
+// PairFeed 表示交易对的信息
 type PairFeed struct {
-	Pair       string
-	File       string
-	Timeframe  string
-	HeikinAshi bool
+	Pair       string // 交易对名称
+	File       string // CSV 文件路径
+	Timeframe  string // 时间框架
+	HeikinAshi bool   // 是否使用平滑后的 HeikinAshi 数据
 }
 
+// CSVFeed 管理多个交易对的历史数据
 type CSVFeed struct {
-	Feeds               map[string]PairFeed
-	CandlePairTimeFrame map[string][]model.Candle
+	Feeds               map[string]PairFeed       // 交易对到其历史数据的映射
+	CandlePairTimeFrame map[string][]model.Candle // 蜡烛图时间框架到对应数据的映射
 }
 
+// AssetsInfo 根据交易对名称返回一个默认的资产信息结构体
 func (c CSVFeed) AssetsInfo(pair string) model.AssetInfo {
 	asset, quote := SplitAssetQuote(pair)
 	return model.AssetInfo{
@@ -44,6 +47,7 @@ func (c CSVFeed) AssetsInfo(pair string) model.AssetInfo {
 	}
 }
 
+// parseHeaders 用于解析 CSV 文件的表头
 func parseHeaders(headers []string) (index map[string]int, additional []string, ok bool) {
 	headerMap := map[string]int{
 		"time": 0, "open": 1, "close": 2, "low": 3, "high": 4, "volume": 5,
@@ -64,7 +68,7 @@ func parseHeaders(headers []string) (index map[string]int, additional []string, 
 	return headerMap, additional, true
 }
 
-// NewCSVFeed creates a new data feed from CSV files and resample
+// NewCSVFeed 根据给定的时间框架和一组 PairFeed，创建一个 CSVFeed 实例，并从 CSV 文件中读取历史数据
 func NewCSVFeed(targetTimeframe string, feeds ...PairFeed) (*CSVFeed, error) {
 	csvFeed := &CSVFeed{
 		Feeds:               make(map[string]PairFeed),
@@ -159,14 +163,12 @@ func NewCSVFeed(targetTimeframe string, feeds ...PairFeed) (*CSVFeed, error) {
 	return csvFeed, nil
 }
 
+// feedTimeframeKey 生成用于唯一标识交易对和时间框架的键
 func (c CSVFeed) feedTimeframeKey(pair, timeframe string) string {
 	return fmt.Sprintf("%s--%s", pair, timeframe)
 }
 
-func (c CSVFeed) LastQuote(_ context.Context, _ string) (float64, error) {
-	return 0, errors.New("invalid operation")
-}
-
+// Limit 限制历史数据的时间范围
 func (c *CSVFeed) Limit(duration time.Duration) *CSVFeed {
 	for pair, candles := range c.CandlePairTimeFrame {
 		start := candles[len(candles)-1].Time.Add(-duration)
@@ -177,7 +179,8 @@ func (c *CSVFeed) Limit(duration time.Duration) *CSVFeed {
 	return c
 }
 
-func isFistCandlePeriod(t time.Time, fromTimeframe, targetTimeframe string) (bool, error) {
+// isFistCandlePeriod 和 isLastCandlePeriod 用于检查给定时间是否为指定时间框架的第一个或最后一个时间段
+func isFirstCandlePeriod(t time.Time, fromTimeframe, targetTimeframe string) (bool, error) {
 	fromDuration, err := str2duration.ParseDuration(fromTimeframe)
 	if err != nil {
 		return false, err
@@ -228,13 +231,14 @@ func isLastCandlePeriod(t time.Time, fromTimeframe, targetTimeframe string) (boo
 	return false, fmt.Errorf("invalid timeframe: %s", targetTimeframe)
 }
 
+// resample 根据目标时间框架重新采样历史数据
 func (c *CSVFeed) resample(pair, sourceTimeframe, targetTimeframe string) error {
 	sourceKey := c.feedTimeframeKey(pair, sourceTimeframe)
 	targetKey := c.feedTimeframeKey(pair, targetTimeframe)
 
 	var i int
 	for ; i < len(c.CandlePairTimeFrame[sourceKey]); i++ {
-		if ok, err := isFistCandlePeriod(c.CandlePairTimeFrame[sourceKey][i].Time, sourceTimeframe,
+		if ok, err := isFirstCandlePeriod(c.CandlePairTimeFrame[sourceKey][i].Time, sourceTimeframe,
 			targetTimeframe); err != nil {
 			return err
 		} else if ok {
@@ -274,6 +278,7 @@ func (c *CSVFeed) resample(pair, sourceTimeframe, targetTimeframe string) error 
 	return nil
 }
 
+// CandlesByPeriod 根据指定的时间范围和时间框架，返回历史蜡烛数据
 func (c CSVFeed) CandlesByPeriod(_ context.Context, pair, timeframe string,
 	start, end time.Time) ([]model.Candle, error) {
 
@@ -288,6 +293,7 @@ func (c CSVFeed) CandlesByPeriod(_ context.Context, pair, timeframe string,
 	return candles, nil
 }
 
+// CandlesByLimit 根据指定的时间框架和数量限制，返回历史蜡烛数据
 func (c *CSVFeed) CandlesByLimit(_ context.Context, pair, timeframe string, limit int) ([]model.Candle, error) {
 	var result []model.Candle
 	key := c.feedTimeframeKey(pair, timeframe)
@@ -298,6 +304,7 @@ func (c *CSVFeed) CandlesByLimit(_ context.Context, pair, timeframe string, limi
 	return result, nil
 }
 
+// CandlesSubscription 返回一个通道，用于订阅指定时间框架下的历史蜡烛数据
 func (c CSVFeed) CandlesSubscription(_ context.Context, pair, timeframe string) (chan model.Candle, chan error) {
 	ccandle := make(chan model.Candle)
 	cerr := make(chan error)

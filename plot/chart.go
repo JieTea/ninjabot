@@ -27,6 +27,7 @@ var (
 	staticFiles embed.FS
 )
 
+// Chart 结构体定义了一个包含图表功能的服务
 type Chart struct {
 	sync.Mutex
 	port            int
@@ -43,6 +44,7 @@ type Chart struct {
 	lastUpdate      time.Time
 }
 
+// Candle 结构体定义了蜡烛图数据的结构
 type Candle struct {
 	Time   time.Time     `json:"time"`
 	Open   float64       `json:"open"`
@@ -53,6 +55,7 @@ type Candle struct {
 	Orders []model.Order `json:"orders"`
 }
 
+// Shape 结构体定义了图表上的形状
 type Shape struct {
 	StartX time.Time `json:"x0"`
 	EndX   time.Time `json:"x1"`
@@ -61,11 +64,13 @@ type Shape struct {
 	Color  string    `json:"color"`
 }
 
+// assetValue 结构体定义了资产的价值
 type assetValue struct {
 	Time  time.Time `json:"time"`
 	Value float64   `json:"value"`
 }
 
+// indicatorMetric 结构体定义了指标的度量
 type indicatorMetric struct {
 	Name   string      `json:"name"`
 	Time   []time.Time `json:"time"`
@@ -74,6 +79,7 @@ type indicatorMetric struct {
 	Style  string      `json:"style"`
 }
 
+// plotIndicator 结构体定义了图表上的指标
 type plotIndicator struct {
 	Name    string            `json:"name"`
 	Overlay bool              `json:"overlay"`
@@ -81,12 +87,14 @@ type plotIndicator struct {
 	Warmup  int               `json:"-"`
 }
 
+// drawdown 结构体定义了回撤的信息
 type drawdown struct {
 	Value string    `json:"value"`
 	Start time.Time `json:"start"`
 	End   time.Time `json:"end"`
 }
 
+// Indicator 定义了指标接口，用于计算并显示在图表上
 type Indicator interface {
 	Name() string
 	Overlay() bool
@@ -95,6 +103,7 @@ type Indicator interface {
 	Load(dataframe *model.Dataframe)
 }
 
+// IndicatorMetric  结构体定义了指标的度量
 type IndicatorMetric struct {
 	Name   string
 	Color  string
@@ -103,6 +112,7 @@ type IndicatorMetric struct {
 	Time   []time.Time
 }
 
+// OnOrder 方法用于处理新订单的通知
 func (c *Chart) OnOrder(order model.Order) {
 	c.Lock()
 	defer c.Unlock()
@@ -111,6 +121,7 @@ func (c *Chart) OnOrder(order model.Order) {
 	c.orderByID[order.ID] = order
 }
 
+// OnCandle 方法用于处理新蜡烛图数据的通知
 func (c *Chart) OnCandle(candle model.Candle) {
 	c.Lock()
 	defer c.Unlock()
@@ -151,6 +162,7 @@ func (c *Chart) OnCandle(candle model.Candle) {
 	}
 }
 
+// equityValuesByPair 方法用于获取指定交易对的资产和报价的价值变化
 func (c *Chart) equityValuesByPair(pair string) (asset []assetValue, quote []assetValue) {
 	assetValues := make([]assetValue, 0)
 	equityValues := make([]assetValue, 0)
@@ -175,6 +187,7 @@ func (c *Chart) equityValuesByPair(pair string) (asset []assetValue, quote []ass
 	return assetValues, equityValues
 }
 
+// indicatorsByPair 方法用于获取指定交易对的指标数据
 func (c *Chart) indicatorsByPair(pair string) []plotIndicator {
 	indicators := make([]plotIndicator, 0)
 	for _, i := range c.indicators {
@@ -230,6 +243,7 @@ func (c *Chart) indicatorsByPair(pair string) []plotIndicator {
 	return indicators
 }
 
+// candlesByPair 方法用于获取指定交易对的蜡烛图数据
 func (c *Chart) candlesByPair(pair string) []Candle {
 	candles := make([]Candle, len(c.candles[pair]))
 	orderCheck := make(map[int64]bool)
@@ -263,6 +277,7 @@ func (c *Chart) candlesByPair(pair string) []Candle {
 	return candles
 }
 
+// shapesByPair 方法用于获取指定交易对的形状数据
 func (c *Chart) shapesByPair(pair string) []Shape {
 	shapes := make([]Shape, 0)
 	for id := range c.ordersIDsByPair[pair].Iter() {
@@ -291,6 +306,7 @@ func (c *Chart) shapesByPair(pair string) []Shape {
 	return shapes
 }
 
+// orderStringByPair 方法用于获取指定交易对的订单数据
 func (c *Chart) orderStringByPair(pair string) [][]string {
 	orders := make([][]string, 0)
 	for id := range c.ordersIDsByPair[pair].Iter() {
@@ -307,6 +323,7 @@ func (c *Chart) orderStringByPair(pair string) [][]string {
 	return orders
 }
 
+// handleHealth 方法用于处理健康检查请求
 func (c *Chart) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	if time.Since(c.lastUpdate) > time.Hour+10*time.Minute {
 		_, err := w.Write([]byte(c.lastUpdate.String()))
@@ -319,6 +336,7 @@ func (c *Chart) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// handleIndex 方法用于处理主页请求
 func (c *Chart) handleIndex(w http.ResponseWriter, r *http.Request) {
 	var pairs = make([]string, 0, len(c.candles))
 	for pair := range c.candles {
@@ -342,6 +360,7 @@ func (c *Chart) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleData 方法用于处理数据请求
 func (c *Chart) handleData(w http.ResponseWriter, r *http.Request) {
 	pair := r.URL.Query().Get("pair")
 	if pair == "" {
@@ -378,6 +397,7 @@ func (c *Chart) handleData(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Start 方法用于启动 Chart 服务
 func (c *Chart) handleTradingHistoryData(w http.ResponseWriter, r *http.Request) {
 	pair := r.URL.Query().Get("pair")
 	if pair == "" {
@@ -417,6 +437,7 @@ func (c *Chart) handleTradingHistoryData(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+// Start 方法用于启动 Chart 服务
 func (c *Chart) Start() error {
 	http.Handle(
 		"/assets/",
@@ -437,20 +458,24 @@ func (c *Chart) Start() error {
 	return http.ListenAndServe(fmt.Sprintf(":%d", c.port), nil)
 }
 
+// Option 定义了用于配置 Chart 实例的选项
 type Option func(*Chart)
 
+// WithPort 用于设置 Chart 实例的端口
 func WithPort(port int) Option {
 	return func(chart *Chart) {
 		chart.port = port
 	}
 }
 
+// WithStrategyIndicators 用于设置 Chart 实例的策略指标
 func WithStrategyIndicators(strategy strategy.Strategy) Option {
 	return func(chart *Chart) {
 		chart.strategy = strategy
 	}
 }
 
+// WithPaperWallet 用于设置 Chart 实例的模拟钱包
 func WithPaperWallet(paperWallet *exchange.PaperWallet) Option {
 	return func(chart *Chart) {
 		chart.paperWallet = paperWallet
@@ -458,18 +483,21 @@ func WithPaperWallet(paperWallet *exchange.PaperWallet) Option {
 }
 
 // WithDebug starts chart without compress
+// WithDebug 用于设置 Chart 实例的调试模式
 func WithDebug() Option {
 	return func(chart *Chart) {
 		chart.debug = true
 	}
 }
 
+// WithCustomIndicators 用于设置 Chart 实例的自定义指标
 func WithCustomIndicators(indicators ...Indicator) Option {
 	return func(chart *Chart) {
 		chart.indicators = indicators
 	}
 }
 
+// NewChart 创建一个新的 Chart 实例，可选参数可用于设置端口、策略指标等
 func NewChart(options ...Option) (*Chart, error) {
 	chart := &Chart{
 		port:            8080,

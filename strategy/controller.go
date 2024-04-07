@@ -7,13 +7,15 @@ import (
 	"github.com/rodrigo-brito/ninjabot/service"
 )
 
+// Controller 控制策略执行的结构体
 type Controller struct {
-	strategy  Strategy
-	dataframe *model.Dataframe
-	broker    service.Broker
-	started   bool
+	strategy  Strategy         // 策略实例
+	dataframe *model.Dataframe // 数据帧用于存储蜡烛图数据
+	broker    service.Broker   // 经纪人实例
+	started   bool             // 标记策略是否已启动
 }
 
+// NewStrategyController 创建一个新的策略控制器实例
 func NewStrategyController(pair string, strategy Strategy, broker service.Broker) *Controller {
 	dataframe := &model.Dataframe{
 		Pair:     pair,
@@ -27,10 +29,12 @@ func NewStrategyController(pair string, strategy Strategy, broker service.Broker
 	}
 }
 
+// Start 启动策略
 func (s *Controller) Start() {
 	s.started = true
 }
 
+// OnPartialCandle 处理部分蜡烛图数据
 func (s *Controller) OnPartialCandle(candle model.Candle) {
 	if !candle.Complete && len(s.dataframe.Close) >= s.strategy.WarmupPeriod() {
 		if str, ok := s.strategy.(HighFrequencyStrategy); ok {
@@ -41,6 +45,7 @@ func (s *Controller) OnPartialCandle(candle model.Candle) {
 	}
 }
 
+// updateDataFrame 更新数据帧中的数据
 func (s *Controller) updateDataFrame(candle model.Candle) {
 	if len(s.dataframe.Time) > 0 && candle.Time.Equal(s.dataframe.Time[len(s.dataframe.Time)-1]) {
 		last := len(s.dataframe.Time) - 1
@@ -67,6 +72,7 @@ func (s *Controller) updateDataFrame(candle model.Candle) {
 	}
 }
 
+// OnCandle 处理完整的蜡烛图数据
 func (s *Controller) OnCandle(candle model.Candle) {
 	if len(s.dataframe.Time) > 0 && candle.Time.Before(s.dataframe.Time[len(s.dataframe.Time)-1]) {
 		log.Errorf("late candle received: %#v", candle)

@@ -14,10 +14,11 @@ type TelegramSettings struct {
 }
 
 type Settings struct {
-	Pairs    []string
+	Pairs    []string // 交易对
 	Telegram TelegramSettings
 }
 
+// Balance 余额
 type Balance struct {
 	Asset    string
 	Free     float64
@@ -25,19 +26,20 @@ type Balance struct {
 	Leverage float64
 }
 
+// AssetInfo 资产信息
 type AssetInfo struct {
-	BaseAsset  string
-	QuoteAsset string
+	BaseAsset  string //基础资产
+	QuoteAsset string // 引用资产 ??
 
 	MinPrice    float64
 	MaxPrice    float64
-	MinQuantity float64
+	MinQuantity float64 // 最小数量
 	MaxQuantity float64
-	StepSize    float64
-	TickSize    float64
+	StepSize    float64 // 步长
+	TickSize    float64 // ??
 
-	QuotePrecision     int
-	BaseAssetPrecision int
+	QuotePrecision     int // 报价精度
+	BaseAssetPrecision int // 基础资产精度
 }
 
 type Dataframe struct {

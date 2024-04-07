@@ -10,16 +10,21 @@ import (
 	"github.com/rodrigo-brito/ninjabot/tools/log"
 )
 
+// OCOSell 随机指标的交易策略，该策略基于随机指标（Stochastic Oscillator）来进行交易决策基于随机指标，
+// 并使用OCO（One Cancels the Other）订单来管理风险。
 type OCOSell struct{}
 
+// Timeframe 返回策略执行的时间周期
 func (e OCOSell) Timeframe() string {
 	return "1d"
 }
 
+// WarmupPeriod 策略执行前需要加载数据的时间周期。
 func (e OCOSell) WarmupPeriod() int {
 	return 9
 }
 
+// Indicators 计算并返回用于图表显示的指标数据
 func (e OCOSell) Indicators(df *model.Dataframe) []strategy.ChartIndicator {
 	df.Metadata["stoch"], df.Metadata["stoch_signal"] = indicator.Stoch(
 		df.High,
@@ -55,6 +60,7 @@ func (e OCOSell) Indicators(df *model.Dataframe) []strategy.ChartIndicator {
 	}
 }
 
+// OnCandle 根据随机指标的交叉情况执行买卖操作。
 func (e *OCOSell) OnCandle(df *model.Dataframe, broker service.Broker) {
 	closePrice := df.Close.Last(0)
 	log.Info("New Candle = ", df.Pair, df.LastUpdate, closePrice)

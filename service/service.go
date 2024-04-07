@@ -9,11 +9,13 @@ import (
 	"github.com/rodrigo-brito/ninjabot/model"
 )
 
+// Exchange 合并了 Broker 和 Feeder 两个接口
 type Exchange interface {
 	Broker
 	Feeder
 }
 
+// Feeder 些获取市场数据的方法，如获取资产信息、获取最新报价、获取K线数据等
 type Feeder interface {
 	AssetsInfo(pair string) model.AssetInfo
 	LastQuote(ctx context.Context, pair string) (float64, error)
@@ -22,6 +24,7 @@ type Feeder interface {
 	CandlesSubscription(ctx context.Context, pair, timeframe string) (chan model.Candle, chan error)
 }
 
+// Broker 与交易所交互的方法，如查询账户信息、查询持仓信息、下单
 type Broker interface {
 	Account() (model.Account, error)
 	Position(pair string) (asset, quote float64, err error)
@@ -34,12 +37,14 @@ type Broker interface {
 	Cancel(model.Order) error
 }
 
+// Notifier 通知、订单和错误通知
 type Notifier interface {
 	Notify(string)
 	OnOrder(order model.Order)
 	OnError(err error)
 }
 
+// Telegram 通知、订单和错误通知
 type Telegram interface {
 	Notifier
 	Start()

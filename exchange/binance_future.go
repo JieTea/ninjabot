@@ -16,24 +16,26 @@ import (
 	"github.com/rodrigo-brito/ninjabot/tools/log"
 )
 
-type MarginType = futures.MarginType
+type MarginType = futures.MarginType // 保证金类型
 
 var (
-	MarginTypeIsolated MarginType = "ISOLATED"
-	MarginTypeCrossed  MarginType = "CROSSED"
+	MarginTypeIsolated MarginType = "ISOLATED" // 隔离的
+	MarginTypeCrossed  MarginType = "CROSSED"  // 交叉的
 
 	ErrNoNeedChangeMarginType int64 = -4046
 )
 
+// PairOption 交易对配置
 type PairOption struct {
-	Pair       string
-	Leverage   int
-	MarginType futures.MarginType
+	Pair       string             // 交易对
+	Leverage   int                // 杠杆倍数
+	MarginType futures.MarginType // 保证金类型
 }
 
+// BinanceFuture 是对币安期货交易所的封装，提供了一系列交易和数据访问方法。
 type BinanceFuture struct {
 	ctx        context.Context
-	client     *futures.Client
+	client     *futures.Client // 期货客户端
 	assetsInfo map[string]model.AssetInfo
 	HeikinAshi bool
 	Testnet    bool
@@ -45,9 +47,11 @@ type BinanceFuture struct {
 	PairOptions      []PairOption
 }
 
+// BinanceFutureOption 定义了用于配置 BinanceFuture 实例的选项的函数类型。
 type BinanceFutureOption func(*BinanceFuture)
 
 // WithBinanceFuturesHeikinAshiCandle will use Heikin Ashi candle instead of regular candle
+// WithBinanceFuturesHeikinAshiCandle 设置使用 Heikin Ashi 烛形图。
 func WithBinanceFuturesHeikinAshiCandle() BinanceFutureOption {
 	return func(b *BinanceFuture) {
 		b.HeikinAshi = true
@@ -55,6 +59,7 @@ func WithBinanceFuturesHeikinAshiCandle() BinanceFutureOption {
 }
 
 // WithBinanceFutureCredentials will set the credentials for Binance Futures
+// WithBinanceFutureLeverage 设置交易对的杠杆倍数和保证金类型。
 func WithBinanceFutureCredentials(key, secret string) BinanceFutureOption {
 	return func(b *BinanceFuture) {
 		b.APIKey = key
@@ -74,6 +79,9 @@ func WithBinanceFutureLeverage(pair string, leverage int, marginType MarginType)
 }
 
 // NewBinanceFuture will create a new BinanceFuture instance
+// 创建一个新的 BinanceFuture 实例。
+// 它接受一个上下文对象和一系列选项函数，根据选项函数的配置创建一个 BinanceFuture 实例。
+// 如果出现任何错误，将返回一个错误。
 func NewBinanceFuture(ctx context.Context, options ...BinanceFutureOption) (*BinanceFuture, error) {
 	binance.WebsocketKeepalive = true
 	exchange := &BinanceFuture{ctx: ctx}
@@ -139,6 +147,7 @@ func NewBinanceFuture(ctx context.Context, options ...BinanceFutureOption) (*Bin
 	return exchange, nil
 }
 
+// LastQuote 返回指定交易对的最新报价。
 func (b *BinanceFuture) LastQuote(ctx context.Context, pair string) (float64, error) {
 	candles, err := b.CandlesByLimit(ctx, pair, "1m", 1)
 	if err != nil || len(candles) < 1 {
@@ -147,10 +156,12 @@ func (b *BinanceFuture) LastQuote(ctx context.Context, pair string) (float64, er
 	return candles[0].Close, nil
 }
 
+// AssetsInfo 返回指定交易对的资产信息。
 func (b *BinanceFuture) AssetsInfo(pair string) model.AssetInfo {
 	return b.assetsInfo[pair]
 }
 
+// validate 验证交易对的数量是否在允许的范围内。
 func (b *BinanceFuture) validate(pair string, quantity float64) error {
 	info, ok := b.assetsInfo[pair]
 	if !ok {
@@ -168,11 +179,13 @@ func (b *BinanceFuture) validate(pair string, quantity float64) error {
 	return nil
 }
 
+// CreateOrderOCO 创建一个止损止盈委托订单。
 func (b *BinanceFuture) CreateOrderOCO(_ model.SideType, _ string,
 	_, _, _, _ float64) ([]model.Order, error) {
 	panic("not implemented")
 }
 
+// CreateOrderStop 创建一个止损委托订单。
 func (b *BinanceFuture) CreateOrderStop(pair string, quantity float64, limit float64) (model.Order, error) {
 	err := b.validate(pair, quantity)
 	if err != nil {
@@ -206,6 +219,7 @@ func (b *BinanceFuture) CreateOrderStop(pair string, quantity float64, limit flo
 	}, nil
 }
 
+// formatPrice 格式化价格。
 func (b *BinanceFuture) formatPrice(pair string, value float64) string {
 	if info, ok := b.assetsInfo[pair]; ok {
 		value = common.AmountToLotSize(info.TickSize, info.QuotePrecision, value)
@@ -213,6 +227,7 @@ func (b *BinanceFuture) formatPrice(pair string, value float64) string {
 	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
+// formatQuantity 格式化数量。
 func (b *BinanceFuture) formatQuantity(pair string, value float64) string {
 	if info, ok := b.assetsInfo[pair]; ok {
 		value = common.AmountToLotSize(info.StepSize, info.BaseAssetPrecision, value)
@@ -220,6 +235,7 @@ func (b *BinanceFuture) formatQuantity(pair string, value float64) string {
 	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
+// CreateOrderLimit 创建一个限价委托订单。
 func (b *BinanceFuture) CreateOrderLimit(side model.SideType, pair string,
 	quantity float64, limit float64) (model.Order, error) {
 
@@ -263,6 +279,7 @@ func (b *BinanceFuture) CreateOrderLimit(side model.SideType, pair string,
 	}, nil
 }
 
+// CreateOrderMarket 创建一个市价委托订单。
 func (b *BinanceFuture) CreateOrderMarket(side model.SideType, pair string, quantity float64) (model.Order, error) {
 	err := b.validate(pair, quantity)
 	if err != nil {
@@ -303,10 +320,12 @@ func (b *BinanceFuture) CreateOrderMarket(side model.SideType, pair string, quan
 	}, nil
 }
 
+// CreateOrderMarketQuote 创建一个市价报价委托订单。
 func (b *BinanceFuture) CreateOrderMarketQuote(_ model.SideType, _ string, _ float64) (model.Order, error) {
 	panic("not implemented")
 }
 
+// Cancel 取消指定订单。
 func (b *BinanceFuture) Cancel(order model.Order) error {
 	_, err := b.client.NewCancelOrderService().
 		Symbol(order.Pair).
@@ -315,6 +334,7 @@ func (b *BinanceFuture) Cancel(order model.Order) error {
 	return err
 }
 
+// Orders 获取指定交易对的最近订单列表。
 func (b *BinanceFuture) Orders(pair string, limit int) ([]model.Order, error) {
 	result, err := b.client.NewListOrdersService().
 		Symbol(pair).
@@ -332,6 +352,7 @@ func (b *BinanceFuture) Orders(pair string, limit int) ([]model.Order, error) {
 	return orders, nil
 }
 
+// Order 获取指定订单的详细信息。
 func (b *BinanceFuture) Order(pair string, id int64) (model.Order, error) {
 	order, err := b.client.NewGetOrderService().
 		Symbol(pair).
@@ -345,6 +366,7 @@ func (b *BinanceFuture) Order(pair string, id int64) (model.Order, error) {
 	return newFutureOrder(order), nil
 }
 
+// newFutureOrder 根据期货订单信息创建订单模型。
 func newFutureOrder(order *futures.Order) model.Order {
 	var (
 		price float64
@@ -374,6 +396,7 @@ func newFutureOrder(order *futures.Order) model.Order {
 	}
 }
 
+// Account 获取账户信息。
 func (b *BinanceFuture) Account() (model.Account, error) {
 	acc, err := b.client.NewGetAccountService().Do(b.ctx)
 	if err != nil {
@@ -430,6 +453,7 @@ func (b *BinanceFuture) Account() (model.Account, error) {
 	}, nil
 }
 
+// Position 获取指定交易对的持仓信息。
 func (b *BinanceFuture) Position(pair string) (asset, quote float64, err error) {
 	assetTick, quoteTick := SplitAssetQuote(pair)
 	acc, err := b.Account()
@@ -442,6 +466,7 @@ func (b *BinanceFuture) Position(pair string) (asset, quote float64, err error) 
 	return assetBalance.Free + assetBalance.Lock, quoteBalance.Free + quoteBalance.Lock, nil
 }
 
+// CandlesSubscription 订阅指定交易对的 K 线数据。
 func (b *BinanceFuture) CandlesSubscription(ctx context.Context, pair, period string) (chan model.Candle, chan error) {
 	ccandle := make(chan model.Candle)
 	cerr := make(chan error)
@@ -496,6 +521,7 @@ func (b *BinanceFuture) CandlesSubscription(ctx context.Context, pair, period st
 	return ccandle, cerr
 }
 
+// CandlesByLimit 获取指定交易对的最近 K 线数据。
 func (b *BinanceFuture) CandlesByLimit(ctx context.Context, pair, period string, limit int) ([]model.Candle, error) {
 	candles := make([]model.Candle, 0)
 	klineService := b.client.NewKlinesService()
@@ -524,6 +550,7 @@ func (b *BinanceFuture) CandlesByLimit(ctx context.Context, pair, period string,
 	return candles[:len(candles)-1], nil
 }
 
+// CandlesByPeriod 获取指定时间范围内的 K 线数据。
 func (b *BinanceFuture) CandlesByPeriod(ctx context.Context, pair, period string,
 	start, end time.Time) ([]model.Candle, error) {
 
@@ -554,6 +581,7 @@ func (b *BinanceFuture) CandlesByPeriod(ctx context.Context, pair, period string
 	return candles, nil
 }
 
+// FutureCandleFromKline 从期货 K 线数据创建 Candle 模型。
 func FutureCandleFromKline(pair string, k futures.Kline) model.Candle {
 	var err error
 	t := time.Unix(0, k.OpenTime*int64(time.Millisecond))
@@ -573,6 +601,7 @@ func FutureCandleFromKline(pair string, k futures.Kline) model.Candle {
 	return candle
 }
 
+// FutureCandleFromWsKline 从 Websocket K 线数据创建 Candle 模型。
 func FutureCandleFromWsKline(pair string, k futures.WsKline) model.Candle {
 	var err error
 	t := time.Unix(0, k.StartTime*int64(time.Millisecond))

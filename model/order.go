@@ -5,14 +5,16 @@ import (
 	"time"
 )
 
-type SideType string
-type OrderType string
-type OrderStatusType string
+type SideType string        // SideType 交易方向类型
+type OrderType string       // SideType 交易方向类型
+type OrderStatusType string // OrderStatusType 订单状态类型
 
 var (
+	// 定义交易方向常量
 	SideTypeBuy  SideType = "BUY"
 	SideTypeSell SideType = "SELL"
 
+	// 定义订单类型常量
 	OrderTypeLimit           OrderType = "LIMIT"
 	OrderTypeMarket          OrderType = "MARKET"
 	OrderTypeLimitMaker      OrderType = "LIMIT_MAKER"
@@ -21,6 +23,7 @@ var (
 	OrderTypeTakeProfit      OrderType = "TAKE_PROFIT"
 	OrderTypeTakeProfitLimit OrderType = "TAKE_PROFIT_LIMIT"
 
+	// 定义订单状态类型常量
 	OrderStatusTypeNew             OrderStatusType = "NEW"
 	OrderStatusTypePartiallyFilled OrderStatusType = "PARTIALLY_FILLED"
 	OrderStatusTypeFilled          OrderStatusType = "FILLED"
@@ -30,6 +33,7 @@ var (
 	OrderStatusTypeExpired         OrderStatusType = "EXPIRED"
 )
 
+// Order 订单结构体
 type Order struct {
 	ID         int64           `db:"id" json:"id" gorm:"primaryKey,autoIncrement"`
 	ExchangeID int64           `db:"exchange_id" json:"exchange_id"`
@@ -54,6 +58,7 @@ type Order struct {
 	Candle      Candle  `json:"-" gorm:"-"`
 }
 
+// String 返回订单的字符串表示
 func (o Order) String() string {
 	return fmt.Sprintf("[%s] %s %s | ID: %d, Type: %s, %f x $%f (~$%.f)",
 		o.Status, o.Side, o.Pair, o.ID, o.Type, o.Quantity, o.Price, o.Quantity*o.Price)

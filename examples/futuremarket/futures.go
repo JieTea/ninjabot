@@ -12,6 +12,7 @@ import (
 )
 
 // This example shows how to use futures market with NinjaBot.
+// 示例演示如何在 NinjaBot 中使用期货市场。
 func main() {
 	var (
 		ctx             = context.Background()
@@ -34,6 +35,7 @@ func main() {
 	}
 
 	// Initialize your exchange with futures
+	// 使用期货市场初始化你的交易所
 	binance, err := exchange.NewBinanceFuture(ctx,
 		exchange.WithBinanceFutureCredentials(apiKey, secretKey),
 		exchange.WithBinanceFutureLeverage("BTCUSDT", 1, exchange.MarginTypeIsolated),
@@ -44,8 +46,9 @@ func main() {
 	}
 
 	// Initialize your strategy and bot
-	strategy := new(strategies.CrossEMA)
-	bot, err := ninjabot.NewBot(ctx, settings, binance, strategy)
+	// 初始化你的策略和 bot
+	strategy := new(strategies.CrossEMA)                          // 初始化一个策略
+	bot, err := ninjabot.NewBot(ctx, settings, binance, strategy) // 初始化交易的bot
 	if err != nil {
 		log.Fatalln(err)
 	}

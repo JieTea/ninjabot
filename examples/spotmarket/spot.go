@@ -11,6 +11,7 @@ import (
 	"github.com/rodrigo-brito/ninjabot/exchange"
 )
 
+// 本示例演示如何在 Binance 使用 NinjaBot 进行现货市场交易。
 // This example shows how to use spot market with NinjaBot in Binance
 func main() {
 	var (
@@ -34,18 +35,21 @@ func main() {
 	}
 
 	// Initialize your exchange
+	// 初始化交易所
 	binance, err := exchange.NewBinance(ctx, exchange.WithBinanceCredentials(apiKey, secretKey))
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	// Initialize your strategy and bot
+	// 初始化策略和 bot
 	strategy := new(strategies.CrossEMA)
 	bot, err := ninjabot.NewBot(ctx, settings, binance, strategy)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
+	// 运行交易 bot
 	err = bot.Run(ctx)
 	if err != nil {
 		log.Fatalln(err)
