@@ -179,7 +179,7 @@ func TestIsLastCandlePeriod(t *testing.T) {
 	})
 }
 
-func TestIsFistCandlePeriod(t *testing.T) {
+func TestisFirstCandlePeriod(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		tt := []struct {
 			sourceTimeFrame string
@@ -196,7 +196,7 @@ func TestIsFistCandlePeriod(t *testing.T) {
 
 		for _, tc := range tt {
 			t.Run(fmt.Sprintf("%s to %s", tc.sourceTimeFrame, tc.targetTimeFrame), func(t *testing.T) {
-				first, err := isFistCandlePeriod(tc.time, tc.sourceTimeFrame, tc.targetTimeFrame)
+				first, err := isFirstCandlePeriod(tc.time, tc.sourceTimeFrame, tc.targetTimeFrame)
 				require.NoError(t, err)
 				require.Equal(t, tc.last, first)
 			})
@@ -204,13 +204,13 @@ func TestIsFistCandlePeriod(t *testing.T) {
 	})
 
 	t.Run("invalid source", func(t *testing.T) {
-		last, err := isFistCandlePeriod(time.Now(), "invalid", "1h")
+		last, err := isFirstCandlePeriod(time.Now(), "invalid", "1h")
 		require.Error(t, err)
 		require.False(t, last)
 	})
 
 	t.Run("not supported interval", func(t *testing.T) {
-		last, err := isFistCandlePeriod(time.Now(), "1d", "1y")
+		last, err := isFirstCandlePeriod(time.Now(), "1d", "1y")
 		require.EqualError(t, err, "invalid timeframe: 1y")
 		require.False(t, last)
 	})

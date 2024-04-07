@@ -179,7 +179,7 @@ func (c *CSVFeed) Limit(duration time.Duration) *CSVFeed {
 	return c
 }
 
-// isFistCandlePeriod 和 isLastCandlePeriod 用于检查给定时间是否为指定时间框架的第一个或最后一个时间段
+// isFirstCandlePeriod 和 isLastCandlePeriod 用于检查给定时间是否为指定时间框架的第一个或最后一个时间段
 func isFirstCandlePeriod(t time.Time, fromTimeframe, targetTimeframe string) (bool, error) {
 	fromDuration, err := str2duration.ParseDuration(fromTimeframe)
 	if err != nil {
