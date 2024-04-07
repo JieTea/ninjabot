@@ -11,7 +11,7 @@ import (
 	"github.com/adshao/go-binance/v2/futures"
 )
 
-// 定义了交易对中的资产和报价货币。
+// AssetQuote 定义了交易对中的资产和报价货币。
 type AssetQuote struct {
 	Quote string
 	Asset string

@@ -14,8 +14,10 @@ import (
 	"github.com/rodrigo-brito/ninjabot/tools/log"
 )
 
+// MetadataFetchers 用于获取附加信息的函数类型
 type MetadataFetchers func(pair string, t time.Time) (string, float64)
 
+// Binance 是对 Binance 交易所的封装
 type Binance struct {
 	ctx        context.Context
 	client     *binance.Client
@@ -29,8 +31,10 @@ type Binance struct {
 	MetadataFetchers []MetadataFetchers
 }
 
+// BinanceOption 用于配置 Binance 实例的函数类型
 type BinanceOption func(*Binance)
 
+// WithBinanceCredentials 用于设置 Binance 凭据
 // WithBinanceCredentials will set Binance credentials
 func WithBinanceCredentials(key, secret string) BinanceOption {
 	return func(b *Binance) {
@@ -39,6 +43,7 @@ func WithBinanceCredentials(key, secret string) BinanceOption {
 	}
 }
 
+// WithBinanceHeikinAshiCandle 将蜡烛图转换为 Heikin Ashi
 // WithBinanceHeikinAshiCandle will convert candle to Heikin Ashi
 func WithBinanceHeikinAshiCandle() BinanceOption {
 	return func(b *Binance) {
@@ -46,6 +51,7 @@ func WithBinanceHeikinAshiCandle() BinanceOption {
 	}
 }
 
+// WithMetadataFetcher 在接收到新蜡烛图后执行一个函数，并将附加信息包含在蜡烛图的元数据中
 // WithMetadataFetcher will execute a function after receive a new candle and include additional
 // information to candle's metadata
 func WithMetadataFetcher(fetcher MetadataFetchers) BinanceOption {
@@ -54,6 +60,7 @@ func WithMetadataFetcher(fetcher MetadataFetchers) BinanceOption {
 	}
 }
 
+// WithTestNet 激活 Binance 测试网
 // WithTestNet activate Bianance testnet
 func WithTestNet() BinanceOption {
 	return func(_ *Binance) {
@@ -61,6 +68,7 @@ func WithTestNet() BinanceOption {
 	}
 }
 
+// NewBinance 创建一个新的 Binance 交易所实例
 // NewBinance create a new Binance exchange instance
 func NewBinance(ctx context.Context, options ...BinanceOption) (*Binance, error) {
 	binance.WebsocketKeepalive = true
@@ -80,6 +88,7 @@ func NewBinance(ctx context.Context, options ...BinanceOption) (*Binance, error)
 		return nil, err
 	}
 
+	// 初始化订单精度和资产限制
 	// Initialize with orders precision and assets limits
 	exchange.assetsInfo = make(map[string]model.AssetInfo)
 	for _, info := range results.Symbols {
@@ -112,6 +121,7 @@ func NewBinance(ctx context.Context, options ...BinanceOption) (*Binance, error)
 	return exchange, nil
 }
 
+// LastQuote 获取指定交易对的最新报价
 func (b *Binance) LastQuote(ctx context.Context, pair string) (float64, error) {
 	candles, err := b.CandlesByLimit(ctx, pair, "1m", 1)
 	if err != nil || len(candles) < 1 {
@@ -120,10 +130,12 @@ func (b *Binance) LastQuote(ctx context.Context, pair string) (float64, error) {
 	return candles[0].Close, nil
 }
 
+// AssetsInfo 获取用户指定交易对的资产信息，包括基础资产和报价资产的精度、最小交易量
 func (b *Binance) AssetsInfo(pair string) model.AssetInfo {
 	return b.assetsInfo[pair]
 }
 
+// 验证订单的数量是否在限制范围内。
 func (b *Binance) validate(pair string, quantity float64) error {
 	info, ok := b.assetsInfo[pair]
 	if !ok {
@@ -141,9 +153,11 @@ func (b *Binance) validate(pair string, quantity float64) error {
 	return nil
 }
 
+// CreateOrderOCO 创建OCO订单
 func (b *Binance) CreateOrderOCO(side model.SideType, pair string,
 	quantity, price, stop, stopLimit float64) ([]model.Order, error) {
 
+	// 验证止损价格
 	// validate stop
 	err := b.validate(pair, quantity)
 	if err != nil {
@@ -190,6 +204,7 @@ func (b *Binance) CreateOrderOCO(side model.SideType, pair string,
 	return orders, nil
 }
 
+// CreateOrderStop 创建止损订单
 func (b *Binance) CreateOrderStop(pair string, quantity float64, limit float64) (model.Order, error) {
 	err := b.validate(pair, quantity)
 	if err != nil {
@@ -223,6 +238,7 @@ func (b *Binance) CreateOrderStop(pair string, quantity float64, limit float64) 
 	}, nil
 }
 
+// formatPrice 格式化价格
 func (b *Binance) formatPrice(pair string, value float64) string {
 	if info, ok := b.assetsInfo[pair]; ok {
 		value = common.AmountToLotSize(info.TickSize, info.QuotePrecision, value)
@@ -230,6 +246,7 @@ func (b *Binance) formatPrice(pair string, value float64) string {
 	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
+// formatQuantity 格式化数量
 func (b *Binance) formatQuantity(pair string, value float64) string {
 	if info, ok := b.assetsInfo[pair]; ok {
 		value = common.AmountToLotSize(info.StepSize, info.BaseAssetPrecision, value)
@@ -237,6 +254,7 @@ func (b *Binance) formatQuantity(pair string, value float64) string {
 	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
+// CreateOrderLimit 限价订单
 func (b *Binance) CreateOrderLimit(side model.SideType, pair string,
 	quantity float64, limit float64) (model.Order, error) {
 
@@ -280,6 +298,7 @@ func (b *Binance) CreateOrderLimit(side model.SideType, pair string,
 	}, nil
 }
 
+// CreateOrderMarket 市价订单,订单价格由市场上当前的最优价格决定。
 func (b *Binance) CreateOrderMarket(side model.SideType, pair string, quantity float64) (model.Order, error) {
 	err := b.validate(pair, quantity)
 	if err != nil {
@@ -320,6 +339,7 @@ func (b *Binance) CreateOrderMarket(side model.SideType, pair string, quantity f
 	}, nil
 }
 
+// CreateOrderMarketQuote 市价订单,订单价格由用户指定的报价数量决定
 func (b *Binance) CreateOrderMarketQuote(side model.SideType, pair string, quantity float64) (model.Order, error) {
 	err := b.validate(pair, quantity)
 	if err != nil {
@@ -360,6 +380,7 @@ func (b *Binance) CreateOrderMarketQuote(side model.SideType, pair string, quant
 	}, nil
 }
 
+// Cancel 取消指定的订单
 func (b *Binance) Cancel(order model.Order) error {
 	_, err := b.client.NewCancelOrderService().
 		Symbol(order.Pair).
@@ -368,6 +389,7 @@ func (b *Binance) Cancel(order model.Order) error {
 	return err
 }
 
+// Orders 获取订单列表的详细信息
 func (b *Binance) Orders(pair string, limit int) ([]model.Order, error) {
 	result, err := b.client.NewListOrdersService().
 		Symbol(pair).
@@ -385,6 +407,7 @@ func (b *Binance) Orders(pair string, limit int) ([]model.Order, error) {
 	return orders, nil
 }
 
+// Order 单个订单的详细信息
 func (b *Binance) Order(pair string, id int64) (model.Order, error) {
 	order, err := b.client.NewGetOrderService().
 		Symbol(pair).
@@ -398,6 +421,7 @@ func (b *Binance) Order(pair string, id int64) (model.Order, error) {
 	return newOrder(order), nil
 }
 
+// 将Binance返回的订单数据转换为应用程序中使用的订单数据结构。
 func newOrder(order *binance.Order) model.Order {
 	var price float64
 	cost, _ := strconv.ParseFloat(order.CummulativeQuoteQuantity, 64)
@@ -422,6 +446,7 @@ func newOrder(order *binance.Order) model.Order {
 	}
 }
 
+// Account 获取当前账户的资产余额信息。
 func (b *Binance) Account() (model.Account, error) {
 	acc, err := b.client.NewGetAccountService().Do(b.ctx)
 	if err != nil {
@@ -450,6 +475,7 @@ func (b *Binance) Account() (model.Account, error) {
 	}, nil
 }
 
+// Position 获取指定交易对的资产和报价货币的余额。
 func (b *Binance) Position(pair string) (asset, quote float64, err error) {
 	assetTick, quoteTick := SplitAssetQuote(pair)
 	acc, err := b.Account()
@@ -462,6 +488,7 @@ func (b *Binance) Position(pair string) (asset, quote float64, err error) {
 	return assetBalance.Free + assetBalance.Lock, quoteBalance.Free + quoteBalance.Lock, nil
 }
 
+// CandlesSubscription 订阅K线数据
 func (b *Binance) CandlesSubscription(ctx context.Context, pair, period string) (chan model.Candle, chan error) {
 	ccandle := make(chan model.Candle)
 	cerr := make(chan error)
@@ -516,6 +543,7 @@ func (b *Binance) CandlesSubscription(ctx context.Context, pair, period string) 
 	return ccandle, cerr
 }
 
+// CandlesByLimit 获取指定数量的最新K线数据
 func (b *Binance) CandlesByLimit(ctx context.Context, pair, period string, limit int) ([]model.Candle, error) {
 	candles := make([]model.Candle, 0)
 	klineService := b.client.NewKlinesService()
@@ -544,6 +572,7 @@ func (b *Binance) CandlesByLimit(ctx context.Context, pair, period string, limit
 	return candles[:len(candles)-1], nil
 }
 
+// CandlesByPeriod 获取指定时间范围内的K线数据
 func (b *Binance) CandlesByPeriod(ctx context.Context, pair, period string,
 	start, end time.Time) ([]model.Candle, error) {
 
@@ -574,6 +603,7 @@ func (b *Binance) CandlesByPeriod(ctx context.Context, pair, period string,
 	return candles, nil
 }
 
+// CandleFromKline 将Binance返回的K线数据转换为应用程序中使用的K线数据结构
 func CandleFromKline(pair string, k binance.Kline) model.Candle {
 	t := time.Unix(0, k.OpenTime*int64(time.Millisecond))
 	candle := model.Candle{Pair: pair, Time: t, UpdatedAt: t}
@@ -587,6 +617,7 @@ func CandleFromKline(pair string, k binance.Kline) model.Candle {
 	return candle
 }
 
+// CandleFromWsKline 将Binance返回的K线数据转换为应用程序中使用的K线数据结构
 func CandleFromWsKline(pair string, k binance.WsKline) model.Candle {
 	t := time.Unix(0, k.StartTime*int64(time.Millisecond))
 	candle := model.Candle{Pair: pair, Time: t, UpdatedAt: t}
