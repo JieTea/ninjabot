@@ -28,7 +28,8 @@ type DataFeed struct {
 	Err  chan error
 }
 
-// DataFeedSubscription 管理给定交易所的数据订阅，包括交易对、时间框架和相应的数据消费者。
+// DataFeedSubscription 管理给定交易所的数据订阅，
+// 包括交易对、时间框架和相应的数据消费者。
 type DataFeedSubscription struct {
 	exchange                service.Exchange
 	Feeds                   *set.LinkedHashSetString
